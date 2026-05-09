@@ -1,0 +1,53 @@
+#cloud-config
+# Pre-rendered example for a VirtualBox dev VM, baked-secret mode.
+# Replace the placeholder strings below with your real values, OR render
+# from the template via scripts/render-userdata.sh.
+
+hostname: dev-site-a
+fqdn: dev-site-a
+manage_etc_hosts: true
+preserve_hostname: false
+
+package_update: true
+packages:
+  - curl
+  - gnupg
+  - jq
+  - openssh-server
+
+users:
+  - default
+  - name: ansible
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAA__REPLACE_ME__ ansible@example
+
+ssh_pwauth: false
+disable_root: true
+
+write_files:
+  - path: /etc/cf-cloud-init/baked-token
+    permissions: "0600"
+    content: |
+      REPLACE_WITH_TUNNEL_TOKEN
+
+runcmd:
+  - |
+      set -euo pipefail
+      . /etc/os-release
+      curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg \
+        | gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+      echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $VERSION_CODENAME main" \
+        > /etc/apt/sources.list.d/cloudflare-client.list
+      apt-get update
+      DEBIAN_FRONTEND=noninteractive apt-get install -y cloudflare-warp
+      systemctl enable --now warp-svc
+      token=$(tr -d '\n' < /etc/cf-cloud-init/baked-token)
+      warp-cli --accept-tos connector new "$token"
+      warp-cli --accept-tos connect
+      shred -u /etc/cf-cloud-init/baked-token
+
+final_message: "VirtualBox dev VM ready"

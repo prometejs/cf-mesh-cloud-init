@@ -1,0 +1,20 @@
+#!ipxe
+# /srv/http/boot.ipxe — example iPXE script.
+# Boots the Ubuntu live-server kernel with NoCloud datasource pulled over HTTP.
+# Per-host seed dirs are keyed by MAC: http://10.0.10.10/seed/${mac:hexhyp}/
+#
+# Replace VERSION + paths to match your local mirror.
+
+set base http://10.0.10.10/ubuntu/22.04
+set seed http://10.0.10.10/seed/${mac:hexhyp}/
+
+kernel ${base}/vmlinuz \
+  initrd=initrd \
+  ip=dhcp \
+  url=${base}/ubuntu-22.04-live-server-amd64.iso \
+  autoinstall \
+  ds=nocloud-net;s=${seed} \
+  cloud-config-url=${seed}user-data \
+  ---
+initrd ${base}/initrd
+boot
