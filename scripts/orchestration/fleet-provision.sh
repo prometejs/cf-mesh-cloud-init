@@ -3,8 +3,7 @@
 # state and renders + ships a NoCloud seed (or applies post-install) per site.
 #
 # Idempotency contract:
-#   A host is considered provisioned if /var/lib/cf-cloud-init/warp.registered
-#   exists AND `warp-cli status` returns success. Such hosts are SKIPPED.
+#   A host is considered provisioned if `warp-cli status` returns success. Such hosts are SKIPPED.
 #   Pass --force <site> to re-provision a specific site anyway.
 #
 # Modes:

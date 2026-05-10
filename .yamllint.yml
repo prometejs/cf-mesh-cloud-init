@@ -1,0 +1,13 @@
+extends: default
+rules:
+  line-length: disable
+  document-start: disable
+  comments: disable
+  indentation:
+    spaces: 2
+    indent-sequences: true
+yaml-files:
+  - "*.yaml"
+  - "*.yml"
+  - user-data
+  - meta-data

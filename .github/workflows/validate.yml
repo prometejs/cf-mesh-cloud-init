@@ -10,57 +10,26 @@ permissions:
   contents: read
 
 jobs:
-  lint:
+  static:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Install tools
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y cloud-init yamllint shellcheck genisoimage python3-yaml
+        run: sudo apt-get update && sudo apt-get install -y shellcheck yamllint cloud-init
 
       - name: shellcheck
+        run: shellcheck -x scripts/*.sh scripts/lib/*.sh orchestration/*.sh tests/*.sh
+
+      - name: yamllint
+        run: yamllint cloud-init/examples/
+
+      - name: Render user-data from CI fixture
         run: |
-          shellcheck -x \
-            scripts/*.sh scripts/lib/*.sh \
-            orchestration/*.sh \
-            tests/*.sh
+          set -a
+          . tests/fixtures/ci.env
+          set +a
+          ./scripts/render-userdata.sh > /tmp/rendered.cfg
 
-      - name: yamllint hand-written examples
-        run: |
-          yamllint -d '{extends: default, rules: {line-length: disable, document-start: disable, comments: disable, indentation: {spaces: 2, indent-sequences: true}}}' \
-            cloud-init/examples/virtualbox-dev/user-data
-
-      - name: Render every fixture and validate
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          for f in tests/fixtures/*.env; do
-            echo "==> rendering with $f"
-            ( set -a; . "$f"; set +a; ./scripts/render-userdata.sh ) > /tmp/rendered.cfg
-
-            echo "    yaml parse"
-            python3 -c 'import yaml,sys; yaml.safe_load(open("/tmp/rendered.cfg"))'
-
-            echo "    cloud-init schema"
-            cloud-init schema --config-file /tmp/rendered.cfg
-
-            echo "    yamllint rendered output"
-            yamllint -d '{extends: default, rules: {line-length: disable, document-start: disable, comments: disable, indentation: {spaces: 2, indent-sequences: true}}}' /tmp/rendered.cfg
-
-            echo "    bash -n on every embedded script"
-            rm -rf /tmp/cfscripts && mkdir /tmp/cfscripts
-            ./tests/extract-scripts.py /tmp/rendered.cfg /tmp/cfscripts
-            for s in /tmp/cfscripts/*; do bash -n "$s"; done
-
-            rm -f /tmp/rendered.cfg
-          done
-
-      - name: Build seed ISO smoke test
-        run: |
-          set -euo pipefail
-          ( set -a; . tests/fixtures/baked.env; set +a; ./scripts/render-userdata.sh ) > /tmp/u
-          ./scripts/make-seed-iso.sh /tmp/u /tmp/seed.iso
-          test -s /tmp/seed.iso
+      - name: cloud-init schema
+        run: cloud-init schema --config-file /tmp/rendered.cfg

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Local lint runner — mirrors what CI does.
 # Validates rendered cloud-init, yamllint, shellcheck. Run from repo root.
+# can be used as a pre-commit hook or run manually before pushing changes.
 set -euo pipefail
 
 REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)
