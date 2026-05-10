@@ -1,20 +1,17 @@
 # Rendering templates
-[*metadata*][instance identity file] and [*user-data*][init script file] templates provided are required by cloud-init's nocloud data source; see `ds=nocloud-net;s=http://...`. 
 
-Each instance needs dedicated rendered configs from [meta-data.tpl](./meta-data.tpl) and [user-data.tpl](./user-data.tpl) which is stored in a /var/www/html/seed/<NIC-MAC>/user-data. This can be achieved by:
-- Pre-registration (provisioner knows MACs in advance)
-- Just-in-time (provisioner reacts to boot)
+The `meta-data`<sub>instance identity file</sub> and `user-data`<sub>init script file</sub> templates are required by cloud-init's NoCloud datasource (`ds=nocloud-net;`). This doc covers how we render them.
 
-[Hover over me](https://example.com "This is the tooltip text!")
+## Rendering strategies
+**Pre-registration** renders instance-specific seed files ahead of time — assuming the provisioner already knows each MAC — and serves them from paths like `/var/www/html/seed/<NIC-MAC>/user-data`. Simple, but secrets end up embedded on disk and exposed over HTTP.
 
-## Why do we need per machine configs?
-each machine installs a warp connector that needs to the connector secret to be run. 
+**Just-in-Time (JIT)** renders cloud-init data dynamically when the PXE-booted client requests it during initialization, reducing long-lived secret exposure and enabling per-boot credential generation.
 
-## Test case
-Because clients MAC are unknown beforehand, we need to generate per-machine configs the moment a machine actually requests them.
+## Why per-machine configs?
+Each machine installs a WARP Connector and needs its own connector secret to register. In our setup the clients' MACs aren't known beforehand, so configs are generated the moment a machine actually requests them — i.e. JIT.
 
-## How Just-in-Time Actually Works
-We replace static `/var/www/html/seed/` directory tree with a web application. The simplest version is a tiny Flask/FastAPI/Go service: see [seed-server.py](../scripts/seed-server.py)
+## How JIT actually works
+The static `/var/www/html/seed/` directory tree is replaced by a tiny web service (Flask / FastAPI / Go) — see [seed-server.py](../scripts/seed-server.py).
 
 #### Boot Sequence E2E
 ```mermaid
@@ -77,14 +74,12 @@ sequenceDiagram
     end
 ```
 
-## Securely passing secrets in the cloudinit phase
-**Problem**: How do we securely inject secrets during provisioning without baking long-lived credentials into images or rendered templates?
+## Securely passing secrets in the cloud-init phase
+**The secret-zero problem** — how do we inject the first credential a workload needs to authenticate to a secret store, without baking long-lived secrets into images or rendered templates? That initial credential has to come from somewhere.
 
-**Challenge**: solving the “secret zero” problem: securely providing an initial credential that allows a workload to authenticate to a secret store and retrieve all other secrets during cloud-init.
+#### Options for injecting the secret
+1. **IMDSv2 metadata bootstrap** *(recommended)* — the instance retrieves short-lived credentials from the platform metadata service during the `runcmd` phase. No static secrets in templates or user-data.
+2. **Vault wrapped-token bootstrap** — a short-TTL, single-use wrapped token (e.g. 60s) is passed via cloud-init; the instance unwraps it during initialization to retrieve its real secrets.
+3. **Provisioning service callout** *(selected for testing)* — the instance contacts an internal provisioning/inventory service over HTTP(S) at boot to fetch bootstrap credentials or config metadata.
 
-#### Options for Injecting the Secret
-1. **IMDSv2 Metadata Bootstrap** (Recommended): The instance retrieves short-lived credentials from the platform metadata service during the runcmd boot phase. No static secrets are embedded in templates or user data.
-2. **Vault Wrapped Token Bootstrap**: A short-TTL, single-use wrapped token is passed via cloud-init. Before provisioning, HashiCorp Vault generates a wrapped bootstrap token (e.g., 60s TTL) that the instance unwraps during initialization to retrieve its actual secrets.
-3. **Provisioning Service Callout** (Selected for Testing): During boot, the instance contacts an internal provisioning or inventory service over HTTP(S) to fetch bootstrap credentials or configuration metadata.
-
-*The Network-Boot Inventory Callout approach is well-suited for the local VirtualBox test environment because NAT networking allows reliable outbound guest-to-host communication without requiring bridged networking, cloud metadata services, or a full HashiCorp Vault deployment.*
+*The Provisioning Service Callout suits the local VirtualBox environment: NAT networking gives reliable outbound guest-to-host communication without requiring bridged networking, cloud metadata services, or a full HashiCorp Vault deployment.*
