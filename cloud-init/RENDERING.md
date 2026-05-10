@@ -64,7 +64,7 @@ sequenceDiagram
         V->>K: secret-id
     end
 
-    ect rgb(0,0,0,0)
+    rect rgb(0,0,0,0)
         Note over C,V: Post-reboot: Installed process like vault agent runs
     end
 ```
