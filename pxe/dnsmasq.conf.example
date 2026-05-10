@@ -1,6 +1,6 @@
 # /etc/dnsmasq.d/pxe.conf — example only
-# Adjust interface, range, gateway, and TFTP/HTTP roots for your LAN.
-
+# Adjust interface, dhcp range, gateway, and TFTP/HTTP roots for your LAN.
+# Listen only on the network interface enp1s0
 interface=enp1s0
 bind-interfaces
 domain-needed
@@ -9,23 +9,25 @@ bogus-priv
 # DHCP scope for the PXE network
 dhcp-range=10.0.10.50,10.0.10.150,12h
 dhcp-option=3,10.0.10.1                      # router
-dhcp-option=6,1.1.1.1,1.0.0.1                # dns
+dhcp-option=6,1.1.1.1,1.0.0.1                # dns (cloudflare)
 
 # TFTP root (serves iPXE binaries to legacy PXE clients)
 enable-tftp
 tftp-root=/srv/tftp
 
-# Two-stage PXE: send iPXE binary on first try, then iPXE script on second
+# Tags any client that includes DHCP option 175 as ipxe
 dhcp-match=set:ipxe,175
-# Stage 1: BIOS PXE → undionly.kpxe ; UEFI → ipxe.efi
-dhcp-boot=tag:!ipxe,tag:bios,undionly.kpxe
-dhcp-boot=tag:!ipxe,tag:uefi,ipxe.efi
-# Stage 2: iPXE has loaded; send it to our HTTP boot script
-dhcp-boot=tag:ipxe,http://10.0.10.10/boot.ipxe
 
 # UEFI vs BIOS detection
 dhcp-match=set:bios,option:client-arch,0
 dhcp-match=set:uefi,option:client-arch,7
 dhcp-match=set:uefi,option:client-arch,9
+
+# Two-stage PXE: send iPXE binary on first try, then iPXE script on second
+# Stage 1: BIOS PXE → undionly.kpxe ; UEFI → ipxe.efi
+dhcp-boot=tag:!ipxe,tag:bios,undionly.kpxe
+dhcp-boot=tag:!ipxe,tag:uefi,ipxe.efi
+# Stage 2: iPXE has loaded; send it to our HTTP boot script
+dhcp-boot=tag:ipxe,http://10.0.10.10/boot.ipxe
 
 log-dhcp

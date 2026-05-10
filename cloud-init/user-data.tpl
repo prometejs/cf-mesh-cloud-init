@@ -2,11 +2,6 @@
 # vim: set ft=yaml :
 # NoCloud user-data template for Cloudflare WARP Connector hosts.
 # Render with scripts/render-userdata.sh — placeholders are {{VAR}}.
-# Required: HOSTNAME, ANSIBLE_SSH_PUBKEY, SECRETS_MODE
-# Conditional:
-#   SECRETS_MODE=baked  -> WARP_TUNNEL_TOKEN
-#   SECRETS_MODE=http   -> SECRET_FETCH_URL, optional SECRET_FETCH_AUTH_HEADER
-#   SECRETS_MODE=vault  -> VAULT_ADDR, VAULT_KV_PATH, plus AppRole or JWT vars
 
 hostname: {{HOSTNAME}}
 fqdn: {{HOSTNAME}}
@@ -26,6 +21,9 @@ packages:
 
 users:
   - default
+  - name: warp
+    system: true
+    shell: /usr/sbin/nologin
   - name: ansible
     gecos: Ansible automation user
     groups: [sudo]
@@ -39,10 +37,34 @@ ssh_pwauth: false
 disable_root: true
 
 write_files:
+  - path: /etc/systemd/system/warp-connector.service
+    permissions: '0644'
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Cloudflare WARP Connector
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=warp
+      # Load the $WARP_TOKEN environment variable from a secure file 
+      EnvironmentFile=/etc/warp/connector.env 
+      # 1. Register the token (runs before the main process), configures WARP client into "Connector mode" acting as a site-to-site or subnet router rather than a standard user VPN
+      ExecStartPre=/usr/local/bin/warp-cli --accept-tos connector new ${WARP_TOKEN}
+      # 2. Connect to the WARP network (ExecStart), this will establish the tunnel and keep it alive
+      ExecStart=/usr/local/bin/warp-cli --accept-tos connect
+      Restart=on-failure
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+  
   - path: /etc/ssh/sshd_config.d/10-cf-hardening.conf
     permissions: "0644"
     owner: root:root
     content: |
+      # SSH Hardening: Enforce key-only authentication, block root, and disable tunneling
       PasswordAuthentication no
       PermitRootLogin no
       KbdInteractiveAuthentication no
@@ -51,115 +73,60 @@ write_files:
       AllowTcpForwarding no
       MaxAuthTries 3
 
-  - path: /etc/cf-cloud-init/secrets.env
-    permissions: "0600"
-    owner: root:root
-    content: |
-      SECRETS_MODE={{SECRETS_MODE}}
-      SECRET_FETCH_URL={{SECRET_FETCH_URL}}
-      SECRET_FETCH_AUTH_HEADER={{SECRET_FETCH_AUTH_HEADER}}
-      VAULT_ADDR={{VAULT_ADDR}}
-      VAULT_KV_PATH={{VAULT_KV_PATH}}
-      VAULT_ROLE_ID={{VAULT_ROLE_ID}}
-      VAULT_SECRET_ID={{VAULT_SECRET_ID}}
-      VAULT_JWT_ROLE={{VAULT_JWT_ROLE}}
-      VAULT_JWT_PATH={{VAULT_JWT_PATH}}
-
-  - path: /etc/cf-cloud-init/baked-token
-    permissions: "0600"
-    owner: root:root
-    content: |
-      {{WARP_TUNNEL_TOKEN}}
-
-  - path: /usr/local/sbin/cf-fetch-secret
-    permissions: "0700"
-    owner: root:root
-    content: |
-      #!/usr/bin/env bash
-      # Mode-aware tunnel_token fetcher. Reads /etc/cf-cloud-init/secrets.env.
-      set -euo pipefail
-      # shellcheck disable=SC1091
-      source /etc/cf-cloud-init/secrets.env
-
-      case "${SECRETS_MODE:-}" in
-        baked)
-          tr -d '\n' < /etc/cf-cloud-init/baked-token
-          ;;
-        http)
-          : "${SECRET_FETCH_URL:?SECRET_FETCH_URL required}"
-          if [[ -n "${SECRET_FETCH_AUTH_HEADER:-}" ]]; then
-            curl -fsSL -H "${SECRET_FETCH_AUTH_HEADER}" "${SECRET_FETCH_URL}" \
-              | jq -r '.tunnel_token'
-          else
-            curl -fsSL "${SECRET_FETCH_URL}" | jq -r '.tunnel_token'
-          fi
-          ;;
-        vault)
-          : "${VAULT_ADDR:?VAULT_ADDR required}"
-          : "${VAULT_KV_PATH:?VAULT_KV_PATH required}"
-          if [[ -n "${VAULT_ROLE_ID:-}" && -n "${VAULT_SECRET_ID:-}" ]]; then
-            body=$(jq -nc --arg r "$VAULT_ROLE_ID" --arg s "$VAULT_SECRET_ID" \
-              '{role_id:$r,secret_id:$s}')
-            vt=$(curl -fsSL --request POST --data "$body" \
-              "${VAULT_ADDR}/v1/auth/approle/login" | jq -r '.auth.client_token')
-          elif [[ -n "${VAULT_JWT_ROLE:-}" && -n "${VAULT_JWT_PATH:-}" ]]; then
-            jwt=$(cat "$VAULT_JWT_PATH")
-            body=$(jq -nc --arg r "$VAULT_JWT_ROLE" --arg j "$jwt" \
-              '{role:$r,jwt:$j}')
-            vt=$(curl -fsSL --request POST --data "$body" \
-              "${VAULT_ADDR}/v1/auth/jwt/login" | jq -r '.auth.client_token')
-          else
-            echo "vault mode requires AppRole or JWT auth vars" >&2; exit 1
-          fi
-          curl -fsSL -H "X-Vault-Token: $vt" \
-            "${VAULT_ADDR}/v1/${VAULT_KV_PATH}" | jq -r '.data.data.tunnel_token'
-          ;;
-        *)
-          echo "unknown SECRETS_MODE: ${SECRETS_MODE:-<empty>}" >&2; exit 1
-          ;;
-      esac
-
-  - path: /usr/local/sbin/cf-install-warp
-    permissions: "0700"
-    owner: root:root
-    content: |
-      #!/usr/bin/env bash
-      set -euo pipefail
-
-      MARKER=/var/lib/cf-cloud-init/warp.registered
-      mkdir -p "$(dirname "$MARKER")"
-
-      if [[ -f "$MARKER" ]] && warp-cli --accept-tos status >/dev/null 2>&1; then
-        echo "WARP already registered (marker present, status ok); skipping."
-        exit 0
-      fi
-
-      . /etc/os-release
-      curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg \
-        | gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-      arch=$(dpkg --print-architecture)
-      cat > /etc/apt/sources.list.d/cloudflare-client.list <<EOF
-      deb [arch=$arch signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $VERSION_CODENAME main
-      EOF
-      apt-get update
-      DEBIAN_FRONTEND=noninteractive apt-get install -y cloudflare-warp
-
-      systemctl enable --now warp-svc
-
-      token=$(/usr/local/sbin/cf-fetch-secret)
-      if [[ -z "$token" ]]; then
-        echo "failed to fetch tunnel_token" >&2; exit 1
-      fi
-
-      warp-cli --accept-tos connector new "$token"
-      warp-cli --accept-tos connect
-
-      touch "$MARKER"
-      echo "WARP Connector registered."
-
 runcmd:
-  - [ systemctl, restart, ssh ]
-  - [ /usr/local/sbin/cf-install-warp ]
-  - [ shred, -u, /etc/cf-cloud-init/baked-token, /etc/cf-cloud-init/secrets.env ]
+  # Restart SSH to apply hardening changes, ensuring the instance is secure before WARP connection is established
+  - systemctl restart ssh
+  
+  # 1. Download cloudflare warp
+  - curl -fsSL cloudflareclient.com | gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+  - echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] cloudflareclient.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list
+  - apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y cloudflare-warp
+
+  # 2. Set up the secure configuration directory
+  - mkdir -p /etc/warp
+  - chown -R warp:warp /etc/warp
+  - chmod 700 /etc/warp
+
+  # 3. INTERPOLATE MAC INTERFACE LOGIC TO FETCH DYNAMIC TARGET SECRET
+  # Identify the primary default network interface route and grab its hardware MAC identifier
+  - export PRIMARY_INTERFACE=$(ip route show default | awk '{print $5}' | head -n1)
+  - export NIC_MAC=$(cat /sys/class/net/${PRIMARY_INTERFACE}/address)
+  
+  # Ping the dynamic internal Seed Server app router path using the identified MAC address
+  # The seed server verifies the request against its current inventory database and mints credentials
+  - export SEED_SERVER_URL="internal.net{NIC_MAC}"
+  - export FETCHED_TOKEN=$(curl -sS --fail "${SEED_SERVER_URL}" | jq -r '.warp_orchestration_token')
+
+  # Parse payload directly into runtime service system paths 
+  - echo "WARP_TOKEN=${FETCHED_TOKEN}" > /etc/warp/connector.env
+  - chown warp:warp /etc/warp/connector.env
+  - chmod 600 /etc/warp/connector.env
+
+  # 4. Clear environment variables to clean up system footprint logs
+  - unset PRIMARY_INTERFACE
+  - unset NIC_MAC
+  - unset FETCHED_TOKEN
+
+  # 5. Flush configurations and initialize the background service
+  - systemctl daemon-reload
+  - systemctl enable --now warp-connector.service
 
 final_message: "cf-cloud-init: WARP Connector ready ($INSTANCE_ID, uptime $UPTIME)"
+
+
+# Vault-Agent One-Shot Token Wrapping runcmd
+# runcmd:
+#   ...
+#   # 2. Install Vault binary for programmatic unwrapping
+#   - curl -fsSL hashicorp.com | gpg --yes --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+#   - echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
+#   - apt-get update && apt-get install -y vault
+#   # Replace 'VAULT_ADDR_HERE' and 'WRAPPED_TOKEN_HERE' via deployment pipeline variable interpolation
+#   - export VAULT_ADDR="internal.net"
+#   - export WRAPPED_TOKEN="s.X4jHk92Lp01Mv..."   
+#   # Unwrap the one-shot token to get the real WARP orchestration secret token
+#   - export WARP_SECRET=$(VAULT_TOKEN="$WRAPPED_TOKEN" vault kv get -field=token secret/data/cloudflare/connector)
+#   # Clear sensitive installation variables out of active shell process memory
+#   - unset WRAPPED_TOKEN
+#   - unset WARP_SECRET
+#   ...
