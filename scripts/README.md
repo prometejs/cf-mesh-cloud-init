@@ -7,9 +7,7 @@ fleet orchestration on top of `terraform-cloudflare-infra` state.
 
 | Script | What it does |
 |---|---|
-| [render-userdata.sh](render-userdata.sh) | Renders `cloud-init/user-data.tpl` to stdout, substituting `{{VAR}}` placeholders from the environment. |
-| [make-seed-iso.sh](make-seed-iso.sh) | Packages a rendered user-data file (and an auto-generated meta-data) into a NoCloud `CIDATA` ISO for VirtualBox / hypervisor attach. Uses `xorriso` / `genisoimage` / `mkisofs`, whichever is on `$PATH`. |
-| [fetch-warp-token.sh](fetch-warp-token.sh) | Pulls a single site's `tunnel_token` from `terraform-cloudflare-infra` state via `terraform output -json site_inventory`. |
+| [lint.sh](lint.sh) | Validates rendered cloud-init, yamllint, shellcheck. Run from repo root. |
 | [post-install-apply.sh](post-install-apply.sh) | Applies a rendered cloud-config to a Linux host that's already installed: drops it under `/etc/cloud/cloud.cfg.d/`, runs `cloud-init clean` + the four cloud-init phases. Run on the target as root. |
 | [extract-scripts.py](extract-scripts.py) | Parses a rendered cloud-config and writes each `write_files` entry whose content looks like a shell script to a directory, so lint can `bash -n` them. CI helper. |
 | [seed-server.py](seed-server.py) | Sketch (non-production) Flask seed server backing the `runcmd`-driven HTTP secret fetch. Serves `/seed/<MAC>/{user-data,meta-data,secret}`: validates MAC, looks up per-machine inventory, asks Vault to wrap a role-scoped `secret-id` (5 min TTL), renders user-data via Jinja2. |
