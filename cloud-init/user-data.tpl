@@ -112,21 +112,3 @@ runcmd:
   - systemctl enable --now warp-connector.service
 
 final_message: "cf-cloud-init: WARP Connector ready ($INSTANCE_ID, uptime $UPTIME)"
-
-
-# Vault-Agent One-Shot Token Wrapping runcmd
-# runcmd:
-#   ...
-#   # 2. Install Vault binary for programmatic unwrapping
-#   - curl -fsSL hashicorp.com | gpg --yes --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-#   - echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
-#   - apt-get update && apt-get install -y vault
-#   # Replace 'VAULT_ADDR_HERE' and 'WRAPPED_TOKEN_HERE' via deployment pipeline variable interpolation
-#   - export VAULT_ADDR="internal.net"
-#   - export WRAPPED_TOKEN="s.X4jHk92Lp01Mv..."   
-#   # Unwrap the one-shot token to get the real WARP orchestration secret token
-#   - export WARP_SECRET=$(VAULT_TOKEN="$WRAPPED_TOKEN" vault kv get -field=token secret/data/cloudflare/connector)
-#   # Clear sensitive installation variables out of active shell process memory
-#   - unset WRAPPED_TOKEN
-#   - unset WARP_SECRET
-#   ...

@@ -64,13 +64,8 @@ sequenceDiagram
         V->>K: secret-id
     end
 
-    rect rgb(0,0,0,0)
-        Note over C,V: Optional - Post-reboot — Vault Agent
-        Note over C: T+~12m — Reboot
-        K->>V: AppRole login (role-id + secret-id)
-        V->>K: client token
-        K->>V: Fetch application secrets
-        V->>K: secrets
+    ect rgb(0,0,0,0)
+        Note over C,V: Post-reboot: Installed process like vault agent runs
     end
 ```
 
