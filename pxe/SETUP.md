@@ -96,7 +96,7 @@ sudo systemctl restart apache2
 For each site you want to provision, render and place a `user-data` and
 `meta-data` file under `/var/www/html/seed/<NIC-MAC>/`
 
-See more in [cloud-init/README.md](../cloud-init/README.md)
+See more in [cloud-init/RENDERING.md](../cloud-init/RENDERING.md)
 
 ## Starting a Host/Client
 Power on with PXE first in BIOS/UEFI. 

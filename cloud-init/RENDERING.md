@@ -1,8 +1,8 @@
 # Rendering templates
-meta-data and user-data templates provided are required by cloud-init's nocloud data source; see `ds=nocloud-net;s=http://...` → fetches user-data and meta-data from your HTTP server. 
+*meta-data* and *user-data* templates provided are required by cloud-init's nocloud data source; see `ds=nocloud-net;s=http://...` → fetches user-data and meta-data from your HTTP server. 
 
-meta-data: YAML file that tells cloud-init the instance's identity.
-user-data: What should this machine do? What should be installed and configured.
+*meta-data*: YAML file that tells cloud-init the instance's identity.
+*user-data*: What should this machine do? What should be installed and configured.
 
 For each instance we need rendered configs from [meta-data.tpl](./meta-data.tpl) and [user-data.tpl](./user-data.tpl) which is stored in a /var/www/html/seed/<NIC-MAC>/user-data.
 
@@ -10,13 +10,13 @@ This can be achieved by;
 - Pre-registration (provisioner knows MACs in advance)
 - Just-in-time (provisioner reacts to boot)
 
-**Why do we need per machine configs?**
+### Why do we need per machine configs?
 each machine installs a warp connector that needs to the connector secret to be run. 
 
-**For our use case:**
+### Test case
 Because clients MAC are unknown beforehand, we need to generate per-machine configs the moment a machine actually requests them.
 
-**How Just-in-Time Actually Works:**
+### How Just-in-Time Actually Works
 We replace static `/var/www/html/seed/` directory tree with a web application. The simplest version is a tiny Flask/FastAPI/Go service: see [seed-server.py](../scripts/seed-server.py)
 
 **How the Boot Sequence Looks End to End**
@@ -70,8 +70,8 @@ sequenceDiagram
         V->>K: secret-id
     end
 
-    ect rgb(0,0,0,0)
-        Note over C,V: Post-reboot — Vault Agent
+    rect rgb(0,0,0,0)
+        Note over C,V: Optional - Post-reboot — Vault Agent
         Note over C: T+~12m — Reboot
         K->>V: AppRole login (role-id + secret-id)
         V->>K: client token
@@ -80,12 +80,12 @@ sequenceDiagram
     end
 ```
 
-**Securely passing secrets in the cloudinit phase**
+### Securely passing secrets in the cloudinit phase
 Problem: How do we securely inject secrets during provisioning without baking long-lived credentials into images or rendered templates?
 
 Challenge: solving the “secret zero” problem: securely providing an initial credential that allows a workload to authenticate to a secret store and retrieve all other secrets during cloud-init.
 
-Options for Injecting the Secret
+#### Options for Injecting the Secret
 1. **IMDSv2 Metadata Bootstrap** (Recommended): The instance retrieves short-lived credentials from the platform metadata service during the runcmd boot phase. No static secrets are embedded in templates or user data.
 2. **Vault Wrapped Token Bootstrap**: A short-TTL, single-use wrapped token is passed via cloud-init. Before provisioning, HashiCorp Vault generates a wrapped bootstrap token (e.g., 60s TTL) that the instance unwraps during initialization to retrieve its actual secrets.
 3. **Provisioning Service Callout** (Selected for Testing): During boot, the instance contacts an internal provisioning or inventory service over HTTP(S) to fetch bootstrap credentials or configuration metadata.
