@@ -65,7 +65,7 @@ sequenceDiagram
     end
 
     rect rgb(0,0,0,0)
-        Note over C,V: Post-reboot: Installed process like vault agent runs
+        Note over C,V: Post-reboot: Installed processes like vault agent runs
     end
 ```
 
