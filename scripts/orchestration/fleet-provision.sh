@@ -22,6 +22,9 @@ REPO_DIR="$(cd -- "$SCRIPT_DIR/../.." &>/dev/null && pwd)"
 # shellcheck source=../../scripts/lib/tf-state.sh
 . "$REPO_DIR/scripts/lib/tf-state.sh"
 
+echo $SCRIPT_DIR
+echo $REPO_DIR
+
 MODE=""
 FORCE_SITES=()
 OUT_DIR="$REPO_DIR/build/seeds"
