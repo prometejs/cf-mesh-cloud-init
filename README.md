@@ -11,7 +11,7 @@ you'll get a registered WARP Connector — but it's designed as the middle
 layer of a three-repo WARP site-to-site stack:
 
 ```
-[terraform-cloudflare-infra](https://github.com/prometejs/cf-cloud-init/edit/main/README.md)  →  cf-cloud-init  →  ansible-cloudflare-infra
+terraform-cloudflare-infra  →  cf-cloud-init  →  ansible-cloudflare-infra
    creates tunnels                first-boot              day-2 config
    emits tunnel_token             provisioning
 ```
