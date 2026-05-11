@@ -19,7 +19,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 REPO_DIR="$(cd -- "$SCRIPT_DIR/../.." &>/dev/null && pwd)"
-# shellcheck source=../../scripts/lib/tf-state.sh
+# shellcheck source=SCRIPTDIR/../../scripts/lib/tf-state.sh
 . "$REPO_DIR/scripts/lib/tf-state.sh"
 
 MODE=""
