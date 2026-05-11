@@ -16,6 +16,30 @@ terraform-cloudflare-infra  →  cf-cloud-init  →  ansible-cloudflare-infra
    emits tunnel_token             provisioning
 ```
 
+```mermaid
+sequenceDiagram
+    autonumber
+
+    %% Define participants with embedded clickable links
+    participant T as terraform-cloudflare-infra
+    link T: github.com
+    
+    participant C as cf-cloud-init
+    link C: github.com
+    
+    participant A as ansible-cloudflare-infra
+    link A: github.com
+
+    %% Workflow sequence
+    Note over T: Creates tunnels<br/>Emits tunnel_token
+    T->>C: Passes configuration / tokens
+    
+    Note over C: First-boot<br/>Provisioning
+    C->>A: Triggers automation
+    
+    Note over A: Day-2 config
+```
+
 ## What it does
 
 At first boot the rendered user-data:
