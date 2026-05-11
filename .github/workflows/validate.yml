@@ -22,7 +22,7 @@ jobs:
         run: shellcheck -x scripts/*.sh scripts/lib/*.sh scripts/orchestration/*.sh
 
       - name: yamllint
-        run: yamllint cloud-init/examples/
+        run: yamllint .
 
       - name: Render user-data from CI fixture
         run: |
