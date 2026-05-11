@@ -17,27 +17,24 @@ terraform-cloudflare-infra  →  cf-cloud-init  →  ansible-cloudflare-infra
 ```
 
 ```mermaid
-sequenceDiagram
-    autonumber
+graph LR
+    %% Style definitions for look and feel
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px;
+    classDef linkNode fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,font-weight:bold;
 
-    %% Define participants with embedded clickable links
-    participant T as terraform-cloudflare-infra
-    link T: github.com
-    
-    participant C as cf-cloud-init
-    link C: github.com
-    
-    participant A as ansible-cloudflare-infra
-    link A: github.com
+    %% Diagram nodes
+    T["terraform-cloudflare-infra<br/><hr/>• creates tunnels<br/>• emits tunnel_token"]:::linkNode
+    C["cf-cloud-init<br/><hr/>• first-boot<br/>• provisioning"]:::linkNode
+    A["ansible-cloudflare-infra<br/><hr/>• day-2 config"]:::linkNode
 
-    %% Workflow sequence
-    Note over T: Creates tunnels<br/>Emits tunnel_token
-    T->>C: Passes configuration / tokens
-    
-    Note over C: First-boot<br/>Provisioning
-    C->>A: Triggers automation
-    
-    Note over A: Day-2 config
+    %% Flow connections
+    T --> C
+    C --> A
+
+    %% Clickable hyperlinks
+    click T "https://github.com" "Open Terraform Repo"
+    click C "https://github.com" "Open Cloud-Init Repo"
+    click A "https://github.com" "Open Ansible Repo"
 ```
 
 ## What it does
