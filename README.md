@@ -24,7 +24,7 @@ graph LR
 
     %% Flow connections with text notes
     T --> C
-    C --> A
+    C --- A
 
     %% Clickable hyperlinks (Fixed with 'href')
     click T href "https://github.com/prometejs/terraform-cloudflare-infra$0" "Open Terraform Repo"
