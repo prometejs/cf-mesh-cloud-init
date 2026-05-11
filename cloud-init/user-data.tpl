@@ -1,7 +1,7 @@
 #cloud-config
 # vim: set ft=yaml :
 # NoCloud user-data template for Cloudflare WARP Connector hosts.
-# Render with scripts/render-userdata.sh — placeholders are {{VAR}}.
+# Render with scripts/render-userdata.sh to inject required variables from environment or CI fixtures.
 
 hostname: {{HOSTNAME}}
 fqdn: {{HOSTNAME}}
