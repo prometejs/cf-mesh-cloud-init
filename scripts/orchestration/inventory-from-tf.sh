@@ -8,8 +8,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-# shellcheck source=../scripts/lib/tf-state.sh
-. "$SCRIPT_DIR/../scripts/lib/tf-state.sh"
+# shellcheck source=../lib/tf-state.sh
+. "$SCRIPT_DIR/../lib/tf-state.sh"
 
 tf_site_inventory_json "$@" | jq -r '
   to_entries[]
