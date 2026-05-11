@@ -3,9 +3,9 @@
 The `meta-data`<sub>instance identity file</sub> and `user-data`<sub>init script file</sub> templates are required by cloud-init's NoCloud datasource (`ds=nocloud-net;`). This doc covers how we render them.
 
 ## Rendering strategies
-**Pre-registration** renders instance-specific seed files ahead of time — assuming the provisioner already knows each MAC — and serves them from paths like `/var/www/html/seed/<NIC-MAC>/user-data`. Simple, but secrets end up embedded on disk and exposed over HTTP.
+- **Pre-registration**: renders instance-specific seed files ahead of time — assuming the provisioner already knows each MAC — and serves them from paths like `/var/www/html/seed/<NIC-MAC>/user-data`. Simple, but secrets end up embedded on disk and exposed over HTTP.
 
-**Just-in-Time (JIT)** renders cloud-init data dynamically when the PXE-booted client requests it during initialization, reducing long-lived secret exposure and enabling per-boot credential generation.
+- **Just-in-Time (JIT)**: renders cloud-init data dynamically when the PXE-booted client requests it during initialization, reducing long-lived secret exposure and enabling per-boot credential generation.
 
 ## Why per-machine configs?
 Each machine installs a WARP Connector and needs its own connector secret to register. In our setup the clients' MACs aren't known beforehand, so configs are generated the moment a machine actually requests them — i.e. JIT.
