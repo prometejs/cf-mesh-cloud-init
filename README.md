@@ -10,31 +10,25 @@ This repo is usable on its own — point it at any Ubuntu 22.04+ host and
 you'll get a registered WARP Connector — but it's designed as the middle
 layer of a three-repo WARP site-to-site stack:
 
-```
-terraform-cloudflare-infra  →  cf-cloud-init  →  ansible-cloudflare-infra
-   creates tunnels                first-boot              day-2 config
-   emits tunnel_token             provisioning
-```
-
 ```mermaid
 graph LR
-    %% Style definitions for look and feel
-    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px;
-    classDef linkNode fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,font-weight:bold;
+    %% Style definitions
+    classDef default fill:transparent,stroke:#333,stroke-width:1px;
+    classDef linkNode fill:transparent,stroke:#0288d1,stroke-width:1px,font-weight:bold;
+    classDef activeLinkNodeClass fill:transparent,stroke:#2e7d32,stroke-width:4px,font-weight:bold;
 
     %% Diagram nodes
-    T["terraform-cloudflare-infra<br/><hr/>• creates tunnels<br/>• emits tunnel_token"]:::linkNode
-    C["cf-cloud-init<br/><hr/>• first-boot<br/>• provisioning"]:::linkNode
-    A["ansible-cloudflare-infra<br/><hr/>• day-2 config"]:::linkNode
+    T["terraform-cloudflare-infra<br/><hr/>creates tunnels + tf-states"]:::linkNode
+    C["cf-cloud-init<br/><hr/>first-boot provisioning"]:::activeLinkNodeClass
+    A["ansible-cloudflare-infra<br/><hr/>day-2 config"]:::linkNode
 
-    %% Flow connections
+    %% Flow connections with text notes
     T --> C
     C --> A
 
-    %% Clickable hyperlinks
-    click T "https://github.com" "Open Terraform Repo"
-    click C "https://github.com" "Open Cloud-Init Repo"
-    click A "https://github.com" "Open Ansible Repo"
+    %% Clickable hyperlinks (Fixed with 'href')
+    click T href "https://github.com/prometejs/terraform-cloudflare-infra$0" "Open Terraform Repo"
+    click C href "https://github.com/prometejs/cf-cloud-init/tree/main$0" "Open Cloud-Init Repo"
 ```
 
 ## What it does
