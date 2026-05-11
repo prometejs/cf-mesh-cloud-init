@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 TEMPLATE="${TEMPLATE:-$SCRIPT_DIR/../cloud-init/user-data.tpl}"
 
 [[ -f "$TEMPLATE" ]] || {
-  echo "render-userdata: template not found: $TEMPLATE" >&2
+  echo "render: template not found: $TEMPLATE" >&2
   exit 1
 }
 
@@ -28,12 +28,12 @@ content=$(cat -- "$TEMPLATE")
 
 while IFS= read -r v; do
   if [[ -z "${!v:-}" ]]; then
-    echo "render-userdata: \$$v is required (template uses {{$v}})" >&2
+    echo "render: \$$v is required (template uses {{$v}})" >&2
     exit 1
   fi
   val=${!v}
   if [[ "$val" == *$'\n'* ]]; then
-    echo "render-userdata: \$$v contains a newline; values must be single-line" >&2
+    echo "render: \$$v contains a newline; values must be single-line" >&2
     exit 1
   fi
   content=${content//"{{${v}}}"/$val}

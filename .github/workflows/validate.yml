@@ -29,6 +29,7 @@ jobs:
           set -a
           . tests/fixtures/ci.env
           set +a
+          export TEMPLATE="$GITHUB_WORKSPACE/cloud-init/user-data.tpl"
           ./scripts/render.sh > /tmp/rendered.cfg
 
       - name: cloud-init schema
