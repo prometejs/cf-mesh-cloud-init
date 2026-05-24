@@ -54,6 +54,18 @@ from a local source using the *delivery shapes*:
 | PXE / iPXE bare metal | You control the LAN and want a roll-your-own boot path | [pxe/SETUP.md](pxe/SETUP.md) |
 | Already-installed OS  | Existing host you can't reinstall                 | [scripts/post-install-apply.sh](scripts/post-install-apply.sh) |
 
+### Boot Scripts
+At first boot, the rendered `user-data`:
+- Updates apt and installs core utilities.
+- Creates an `ansible` automation user with authorized keys and passwordless sudo
+- Creates a system `warp` user the connector service runs as
+- Hardens `sshd` (no password auth, no root login, no port forwarding)
+- Installs the Cloudflare WARP Connector from `pkg.cloudflareclient.com`
+- Retrieves the host `tunnel_token` from a pluggable backend (see [Secrets](#secrets)).
+- Registers the connector and starts it as a systemd service
+- Installs and configures [node agent](https://github.com/prometejs/cf-mesh-node-agent)
+- Signals task completion via standard cloud-init exit codes.
+
 ## Secrets
 
 Each host needs secrets like WARP `tunnel_token` at provisioning time. 
@@ -67,18 +79,6 @@ user-data fetches at first boot from a pluggable backend.
 - Provisioning secrets never live on the seed media in production modes.
 - `cloud-init clean --logs` before snapshotting strips the cached user-data under `/var/lib/cloud/instances/<id>/`.
 - Don't commit rendered `user-data` and `*.iso`
-
-## Boot Scripts
-At first boot, the rendered `user-data`:
-- Updates apt and installs core utilities.
-- Creates an `ansible` automation user with authorized keys and passwordless sudo
-- Creates a system `warp` user the connector service runs as
-- Hardens `sshd` (no password auth, no root login, no port forwarding)
-- Installs the Cloudflare WARP Connector from `pkg.cloudflareclient.com`
-- Retrieves the host `tunnel_token` from a pluggable backend (see [Secrets](#secrets)).
-- Registers the connector and starts it as a systemd service
-- Installs and configures [node agent](https://github.com/prometejs/cf-mesh-node-agent)
-- Signals task completion via standard cloud-init exit codes.
 
 ## License
 
