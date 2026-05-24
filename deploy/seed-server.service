@@ -1,0 +1,31 @@
+[Unit]
+Description=cf-mesh seed-server (cloud-init NoCloud user-data, meta-data, secret)
+Documentation=https://github.com/prometejs/cf-mesh-cloud-init
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=seed-server
+Group=seed-server
+ExecStart=/usr/bin/python3 /opt/cf-mesh/seed-server.py
+EnvironmentFile=/etc/seed-server.env
+Restart=on-failure
+RestartSec=5s
+
+# Logging goes to journald — `journalctl -u seed-server`
+StandardOutput=journal
+StandardError=journal
+
+# Cheap hardening — script reads from /opt/cf-mesh, fetches S3, binds 127.0.0.1
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/opt/cf-mesh
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -76,6 +76,9 @@ write_files:
 runcmd:
   # Restart SSH to apply hardening changes, ensuring the instance is secure before WARP connection is established
   - systemctl restart ssh
+
+  # add entry to test if warp cli status exists before attempting to fetch token and connect, this ensures idempotency and allows for easier debugging if the service fails to start
+  - if ! command -v warp-cli &> /dev/null; then echo "warp-cli could not be found, installation may have failed"; exit 1; fi
   
   # 1. Download cloudflare warp
   - curl -fsSL cloudflareclient.com | gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
@@ -112,3 +115,12 @@ runcmd:
   - systemctl enable --now warp-connector.service
 
 final_message: "cf-cloud-init: WARP Connector ready ($INSTANCE_ID, uptime $UPTIME)"
+
+
+# - token never lives on the seed media in production modes: it's
+#   fetched, used, and the env vars carrying it are unset in the same
+#   `runcmd` step.
+# - `cloud-init clean --logs` before snapshotting strips the cached
+#   user-data under `/var/lib/cloud/instances/<id>/`.
+# - Don't commit rendered user-data — `.gitignore` covers `rendered/`,
+#   `secrets/`, and `*.iso`.
