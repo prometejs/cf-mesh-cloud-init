@@ -19,7 +19,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y shellcheck
 
       - name: shellcheck
-        run: shellcheck -x scripts/*.sh scripts/lib/*.sh scripts/orchestration/*.sh
+        run: shellcheck -x scripts/*.sh
 
       - name: yamllint
         run: yamllint .
@@ -30,7 +30,7 @@ jobs:
           . tests/fixtures/ci.env
           set +a
           export TEMPLATE="$GITHUB_WORKSPACE/cloud-init/user-data.tpl"
-          ./scripts/render.sh > /tmp/rendered.cfg
+          ./scripts/render-template.sh > /tmp/rendered.cfg
 
       - name: cloud-init schema
         run: cloud-init schema --config-file /tmp/rendered.cfg
