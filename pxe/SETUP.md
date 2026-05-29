@@ -1,5 +1,9 @@
 # PXE + iPXE bare metal
 
+> The steps below are automated by
+> [`scripts/bootstrap-provisioner.sh`](../scripts/bootstrap-provisioner.sh) —
+> run that for a one-shot setup. This page is the reference for what it does.
+
 ## iPXE
 open-source enhanced replacement for PXE firmware; speaks all the modern protocols the original PXE spec lacks. iPXE doesn't replace client's PXE firmware. it is chainloaded, client does PXE boot, the DHCP server tells it to load the iPXE binary instead of pxelinux.0. bare-metal hosts boots from network with a NoCloud datasource served over HTTP.
 

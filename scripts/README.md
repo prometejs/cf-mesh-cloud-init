@@ -80,8 +80,34 @@ S3_BUCKET=cf-mesh-state S3_KEY=infra/terraform.tfstate \
 
 ## [bootstrap-provisioner.sh](bootstrap-provisioner.sh)
 
-Stub/placeholder for host bootstrap (install dependencies, provision the web
-server, deploy the seed server). Currently prints a message only.
+One-shot, idempotent bootstrap for a provisioner host: installs and wires up
+the full PXE stack — `dnsmasq` (authoritative DHCP + TFTP + iPXE chainload),
+`apache2` (reverse-proxy fronting the seed server), and `seed-server.py` as a
+hardened systemd service. Automates the union of [../pxe/SETUP.md](../pxe/SETUP.md)
+and [../tests/deploy/README.md](../tests/deploy/README.md).
 
-- **Requires:** `bash`
-- **Variables:** none
+- **Requires:** run as root on Debian/Ubuntu; run from a checkout/tarball of
+  this repo (it copies sibling assets). Installs `dnsmasq apache2 ipxe python3
+  awscli jq cloud-init` itself.
+- **Flags:**
+  - `--iface NAME` (req) — PXE NIC for dnsmasq
+  - `--ip ADDR` (req) — provisioner static IP (used in `dhcp-boot` + `boot.ipxe`)
+  - `--dhcp-range START,END,LEASE` (req)
+  - `--gateway ADDR` (default: `--ip`) / `--dns LIST` (default: `1.1.1.1,1.0.0.1`)
+  - `--s3-bucket NAME` (req), `--s3-key PATH` (req), `--s3-region REGION`
+  - `--ssh-pubkey STR` (req) — written as `ANSIBLE_SSH_PUBKEY`
+  - `--ubuntu-version X.Y` (default: `22.04`)
+  - `--assume-yes` skip the authoritative-DHCP confirmation prompt; `-h, --help`
+- **AWS creds:** not taken as flags (would leak into the process list) — provide
+  via an instance role or `~seed-server/.aws/credentials`.
+
+The Ubuntu ISO is **not** downloaded; the script only verifies the boot files
+exist under `/var/www/html/ubuntu/<ver>/` and warns if missing.
+
+```bash
+sudo ./scripts/bootstrap-provisioner.sh \
+  --iface enp1s0 --ip 10.0.10.10 --dhcp-range 10.0.10.50,10.0.10.150,12h \
+  --s3-bucket tf-prometejs-state-bucket \
+  --s3-key cloudflare-infra/dev/terraform.tfstate --s3-region eu-west-2 \
+  --ssh-pubkey "ssh-ed25519 AAAA... ansible@fleet"
+```

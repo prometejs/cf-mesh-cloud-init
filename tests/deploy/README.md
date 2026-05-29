@@ -1,5 +1,9 @@
 # Deploying seed-server (Apache + systemd)
 
+> These steps are automated by
+> [`scripts/bootstrap-provisioner.sh`](../../scripts/bootstrap-provisioner.sh)
+> (alongside the PXE stack). This page is the manual reference.
+
 LAN-only, plain-HTTP testing deployment. Apache reverse-proxies `:80 → 127.0.0.1:8080`, where a Python `http.server` daemon serves cloud-init `user-data` / `meta-data` / `secret` keyed by MAC.
 
 ## Layout on the host
