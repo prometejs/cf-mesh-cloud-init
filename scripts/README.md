@@ -1,65 +1,87 @@
 # scripts/
 
-Helpers for rendering, packaging, and applying cloud-init user-data, plus
-fleet orchestration on top of `terraform-cloudflare-infra` state.
+Helpers for rendering, applying, and serving cloud-init user-data for the
+Cloudflare WARP site-to-site mesh fleet.
 
-## Per-host scripts (`scripts/`)
+## [render-template.sh](render-template.sh)
 
-| Script | What it does |
-|---|---|
-| [lint.sh](lint.sh) | Validates rendered cloud-init, yamllint, shellcheck. Run from repo root. |
-| [post-install-apply.sh](post-install-apply.sh) | Applies a rendered cloud-config to a Linux host that's already installed: drops it under `/etc/cloud/cloud.cfg.d/`, runs `cloud-init clean` + the four cloud-init phases. Run on the target as root. |
-| [extract-scripts.py](extract-scripts.py) | Parses a rendered cloud-config and writes each `write_files` entry whose content looks like a shell script to a directory, so lint can `bash -n` them. CI helper. |
-| [seed-server.py](seed-server.py) | Sketch (non-production) Flask seed server backing the `runcmd`-driven HTTP secret fetch. Serves `/seed/<MAC>/{user-data,meta-data,secret}`: validates MAC, looks up per-machine inventory, asks Vault to wrap a role-scoped `secret-id` (5 min TTL), renders user-data via Jinja2. |
-| [lib/tf-state.sh](lib/tf-state.sh) | Sourceable helpers (`tf_site_inventory_json`, `tf_site_names`, `tf_site_token`, `tf_site_field`) used by `fetch-warp-token.sh` and the orchestration driver. Not invoked directly. |
+Renders `cloud-init/user-data.tpl` to stdout, replacing every `{{VAR}}`
+placeholder with `$VAR` from the environment. Missing or empty values error.
 
-## Fleet orchestration (`orchestration/`)
-
-Scripts focused on role in CF site to site stack
-
-| Script | What it does |
-|---|---|
-| [../orchestration/inventory-from-tf.sh](../orchestration/inventory-from-tf.sh) | Prints the site inventory from `terraform-cloudflare-infra` state as TSV (`site<TAB>connector_ip<TAB>private_hostname<TAB>cidr<TAB>environment`). Tokens deliberately omitted — pull individually via `fetch-warp-token.sh`. |
-| [../orchestration/fleet-provision.sh](../orchestration/fleet-provision.sh) | Idempotent fleet driver. Reads sites from TF state, renders + ships per-site user-data either as seed ISOs (`--mode seed-iso`) or via SSH post-install (`--mode post-install`). Skips any host already provisioned (marker + `warp-cli status`). Override with `--force <site>`. |
-
-### Read-only inventory
+- **Requires:** `bash`, `grep`
+- **Variables:** one env var per `{{VAR}}` placeholder in the template;
+  `TEMPLATE` (optional) overrides the template path.
 
 ```bash
-./orchestration/inventory-from-tf.sh
-# site-a  10.10.0.1  site-a.warp.example  10.10.0.0/24  dev
-# site-b  10.10.1.1  site-b.warp.example  10.10.1.0/24  dev
+set -a; . tests/fixtures/ci.env; set +a
+./scripts/render-template.sh > /tmp/rendered.cfg
 ```
 
-### Idempotent fleet provisioning
+## [post-install-apply.sh](post-install-apply.sh)
+
+Applies a rendered cloud-config to an already-installed Linux host: installs
+it to `/etc/cloud/cloud.cfg.d/99-cf-mesh.cfg`, then runs `cloud-init clean`
+and the four cloud-init phases (init-local, init, config, final).
+
+- **Requires:** run as root on the target; `cloud-init` installed
+- **Args:** `<rendered-cloud-config>` — path to the rendered file
 
 ```bash
-# Build per-site seed ISOs under build/seeds/
-ANSIBLE_SSH_PUBKEY=~/.ssh/ansible.pub \
-  ./orchestration/fleet-provision.sh --mode seed-iso
-
-# Apply post-install over SSH to running hosts
-ANSIBLE_SSH_PUBKEY=~/.ssh/ansible.pub \
-  ./orchestration/fleet-provision.sh --mode post-install \
-    --ssh-key ~/.ssh/ansible
-
-# Force-replay one site
-... --mode post-install --force site-a
+sudo ./scripts/post-install-apply.sh /tmp/rendered.cfg
 ```
 
-### Idempotency contract
+## [read-tf-state.sh](read-tf-state.sh)
 
-A host is considered already provisioned IFF both:
+Reads the `site_inventory` output from a Terraform statefile (local file or
+S3) and emits it as `json`, `tsv`, or `names`. Supports filtering to one site
+and masking keys.
 
-- `/var/lib/cf-cloud-init/warp.registered` marker file exists, AND
-- `warp-cli --accept-tos status` returns success.
+- **Requires:** `jq`; `aws` CLI (s3 backend only)
+- **Variables:** AWS creds via env / `AWS_PROFILE`; `AWS_REGION` (s3 backend,
+  unless `--s3-region` given). IAM `s3:GetObject` required for s3.
+- **Flags:**
+  - `-b, --backend local|s3` (default: local; any `--s3-*` flag implies s3)
+  - `-d, --tf-dir DIR` (local: reads `DIR/terraform.tfstate`)
+  - `-u, --s3-bucket NAME` / `-k, --s3-key PATH` (s3, required)
+  - `-r, --s3-region REGION` (s3, optional)
+  - `-i, --inventory-key PATH` dot-path under `.outputs` (default: `site_inventory.value`)
+  - `-o, --output json|tsv|names` (default: json)
+  - `-s, --site NAME` filter to one site
+  - `-m, --mask LIST` comma-separated keys (dot-paths) to mask as `"***"`
 
-`post-install` mode SSHes in to check; if both hold, the site is skipped
-entirely. `--force <site>` (repeatable) overrides the check.
+```bash
+./scripts/read-tf-state.sh --tf-dir ../terraform-cloudflare-infra -o tsv
+```
 
-`seed-iso` mode rebuilds the ISO every run — whether it's consumed is up
-to whoever boots the host.
+## [seed-server.py](seed-server.py)
 
----
+Stdlib `http.server` NoCloud seed server. Serves cloud-init data keyed by the
+booting node's primary-NIC MAC, looked up against `site_inventory[*].tags.mac`
+(hyphen-lower) from Terraform state on S3 (cached). No secrets are baked into
+user-data; the tunnel token is served separately.
 
-Each script documents its required env / args in its own header. Run with
-`bash -x` to see exactly what gets called.
+- `GET /seed/<mac>/user-data` — rendered cloud-config
+- `GET /seed/<mac>/meta-data` — instance-id + local-hostname
+- `GET /seed/<mac>/secret` — `{"warp_orchestration_token": "..."}`
+
+- **Requires:** `python3` (stdlib only); `aws` CLI; AWS creds in env
+- **Variables:**
+  - `S3_BUCKET`, `S3_KEY` (required)
+  - `S3_REGION` (optional)
+  - `INVENTORY_KEY` (default: `site_inventory.value`)
+  - `BIND_HOST` (default: `0.0.0.0`), `BIND_PORT` (default: `8080`)
+  - `CACHE_TTL` seconds (default: `120`)
+  - `TEMPLATE` (default: `../cloud-init/user-data.tpl`)
+
+```bash
+S3_BUCKET=cf-mesh-state S3_KEY=infra/terraform.tfstate \
+  ./scripts/seed-server.py
+```
+
+## [bootstrap-provisioner.sh](bootstrap-provisioner.sh)
+
+Stub/placeholder for host bootstrap (install dependencies, provision the web
+server, deploy the seed server). Currently prints a message only.
+
+- **Requires:** `bash`
+- **Variables:** none
