@@ -11,6 +11,7 @@
 #   -i, --inventory-key PATH      dot-path under .outputs (default: site_inventory.value)
 #   -o, --output json|tsv|names   default: json
 #   -s, --site NAME               filter to one site (assumes result is {name: {...}})
+#   -m, --mask LIST               comma-sep keys to mask (dot-paths ok, e.g. tags.mac -> "***")
 #   -h, --help
 #
 # Any --s3-* flag implies --backend s3.
@@ -20,7 +21,7 @@ set -euo pipefail
 
 BACKEND=local; TF_DIR=; OUTPUT=json; SITE=
 S3_BUCKET=; S3_KEY=; S3_REGION=
-INVENTORY_KEY=site_inventory.value
+INVENTORY_KEY=site_inventory.value; MASK=
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -28,6 +29,7 @@ while [[ $# -gt 0 ]]; do
     -d|--tf-dir)         TF_DIR=$2;        shift 2 ;;
     -o|--output)         OUTPUT=$2;        shift 2 ;;
     -s|--site)           SITE=$2;          shift 2 ;;
+    -m|--mask)           MASK=$2;          shift 2 ;;
     -u|--s3-bucket)      S3_BUCKET=$2;     shift 2 ;;
     -k|--s3-key)         S3_KEY=$2;        shift 2 ;;
     -r|--s3-region)      S3_REGION=$2;     shift 2 ;;
@@ -59,6 +61,15 @@ inv=$(jq -ec --arg p "$INVENTORY_KEY" \
 if [[ -n "$SITE" ]]; then
   inv=$(jq -ec --arg s "$SITE" 'if has($s) then {($s): .[$s]} else empty end' <<<"$inv") \
     || { echo "site '$SITE' not in inventory" >&2; exit 1; }
+fi
+
+if [[ -n "$MASK" ]]; then
+  inv=$(jq -c --arg m "$MASK" '
+    ($m | split(",")) as $keys
+    | with_entries(.value |= (
+        reduce ($keys[] | split(".")) as $p (.;
+          if getpath($p) != null then setpath($p; "***") else . end)))
+  ' <<<"$inv")
 fi
 
 case "$OUTPUT" in

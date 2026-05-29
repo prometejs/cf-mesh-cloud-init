@@ -116,7 +116,7 @@ runcmd:
 
 final_message: "cf-cloud-init: WARP Connector ready ($INSTANCE_ID, uptime $UPTIME)"
 
-
+# add ci runner provisioning logic here if needed, this can be used to conditionally install CI runner software and register it with the appropriate token/URL based on the `ci_runner` variable in the site definition. This allows for dynamic provisioning of CI runners in the same workflow as WARP connectors, which can be useful for self-hosted runner scenarios in GitHub Actions or other CI platforms.
 # - token never lives on the seed media in production modes: it's
 #   fetched, used, and the env vars carrying it are unset in the same
 #   `runcmd` step.
