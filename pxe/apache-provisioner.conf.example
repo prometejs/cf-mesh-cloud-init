@@ -1,0 +1,45 @@
+# Combined PXE-provisioner vhost — copied verbatim to
+# /etc/apache2/sites-available/cf-mesh-provisioner.conf by
+# scripts/bootstrap-provisioner.sh (no placeholders to render).
+# Serves BOTH:
+#   - static PXE assets from /var/www/html  (/boot.ipxe, /ubuntu/<ver>/...)
+#   - the /seed/ API, reverse-proxied to the Python seed daemon on :8080
+# Everything is restricted to RFC1918 clients. Plain HTTP — flip to TLS once
+# you have a cert (see tests/deploy/README.md "Going to TLS later").
+#
+# NOTE: this is the PXE-provisioner config. For a host that serves ONLY seeds
+# (no PXE/boot files), use the locked-down tests/deploy/seed-server.conf instead.
+
+<VirtualHost *:80>
+    ServerName cf-mesh-provisioner
+    DocumentRoot /var/www/html
+
+    # --- Seed API: reverse-proxy to the Python daemon on localhost ---------
+    # ProxyPass takes precedence over the filesystem for /seed/, so this is
+    # served by the daemon, not from DocumentRoot.
+    ProxyPreserveHost On
+    ProxyRequests Off
+    ProxyPass        /seed/  http://127.0.0.1:8080/seed/
+    ProxyPassReverse /seed/  http://127.0.0.1:8080/seed/
+
+    <Location /seed/>
+        Require ip 127.0.0.1 ::1
+        Require ip 10.0.0.0/8
+        Require ip 172.16.0.0/12
+        Require ip 192.168.0.0/16
+    </Location>
+
+    # --- Static PXE assets: boot.ipxe + the Ubuntu kernel/initrd/ISO tree ---
+    # Tighten the CIDR list to your actual PXE / management subnets.
+    <Directory /var/www/html>
+        Options -Indexes +FollowSymLinks
+        AllowOverride None
+        Require ip 127.0.0.1 ::1
+        Require ip 10.0.0.0/8
+        Require ip 172.16.0.0/12
+        Require ip 192.168.0.0/16
+    </Directory>
+
+    ErrorLog  ${APACHE_LOG_DIR}/cf-mesh-error.log
+    CustomLog ${APACHE_LOG_DIR}/cf-mesh-access.log combined
+</VirtualHost>

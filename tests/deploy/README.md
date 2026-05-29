@@ -1,8 +1,15 @@
 # Deploying seed-server (Apache + systemd)
 
-> These steps are automated by
-> [`scripts/bootstrap-provisioner.sh`](../../scripts/bootstrap-provisioner.sh)
-> (alongside the PXE stack). This page is the manual reference.
+> This page covers a **standalone seed-only host** (no PXE) — Apache here
+> (`seed-server.conf`) proxies `/seed/` and denies everything else.
+>
+> For a **combined PXE provisioner** (the usual case), run
+> [`scripts/bootstrap-provisioner.sh`](../../scripts/bootstrap-provisioner.sh):
+> it stands up the same seed app + systemd unit, but installs the combined
+> [`pxe/apache-provisioner.conf.example`](../../pxe/apache-provisioner.conf.example) vhost
+> instead — one that also serves the static PXE assets (`/boot.ipxe`,
+> `/ubuntu/<ver>/…`) from `/var/www/html`. Use the locked-down
+> `seed-server.conf` below only when the host serves seeds and nothing else.
 
 LAN-only, plain-HTTP testing deployment. Apache reverse-proxies `:80 → 127.0.0.1:8080`, where a Python `http.server` daemon serves cloud-init `user-data` / `meta-data` / `secret` keyed by MAC.
 

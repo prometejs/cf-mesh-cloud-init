@@ -82,9 +82,11 @@ S3_BUCKET=cf-mesh-state S3_KEY=infra/terraform.tfstate \
 
 One-shot, idempotent bootstrap for a provisioner host: installs and wires up
 the full PXE stack — `dnsmasq` (authoritative DHCP + TFTP + iPXE chainload),
-`apache2` (reverse-proxy fronting the seed server), and `seed-server.py` as a
-hardened systemd service. Automates the union of [../pxe/SETUP.md](../pxe/SETUP.md)
-and [../tests/deploy/README.md](../tests/deploy/README.md).
+`apache2` (one combined vhost that both serves the static PXE assets —
+`/boot.ipxe`, `/ubuntu/<ver>/…` — and reverse-proxies `/seed/` to the seed
+server), and `seed-server.py` as a hardened systemd service. Automates the
+union of [../pxe/SETUP.md](../pxe/SETUP.md) and
+[../tests/deploy/README.md](../tests/deploy/README.md).
 
 - **Requires:** run as root on Debian/Ubuntu; run from a checkout/tarball of
   this repo (it copies sibling assets). Installs `dnsmasq apache2 ipxe python3

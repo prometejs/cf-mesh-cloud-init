@@ -1,15 +1,21 @@
-# /etc/dnsmasq.d/pxe.conf — example only
-# Adjust interface, dhcp range, gateway, and TFTP/HTTP roots for your LAN.
-# Listen only on the network interface enp1s0
-interface=enp1s0
+# dnsmasq PXE config — single source of truth.
+# Rendered to /etc/dnsmasq.d/pxe.conf by scripts/bootstrap-provisioner.sh, with
+# the {{...}} placeholders filled from flags. To use manually, copy this file,
+# replace the {{...}} placeholders with your values, and drop it in
+# /etc/dnsmasq.d/.
+
+# Listen only on the PXE network interface
+interface={{IFACE}}
 bind-interfaces
 domain-needed
 bogus-priv
 
 # DHCP scope for the PXE network
-dhcp-range=10.0.10.50,10.0.10.150,12h
-dhcp-option=3,10.0.10.1                      # router
-dhcp-option=6,1.1.1.1,1.0.0.1                # dns (cloudflare)
+dhcp-range={{DHCP_RANGE}}
+# router
+dhcp-option=3,{{GATEWAY}}
+# dns
+dhcp-option=6,{{DNS}}
 
 # TFTP root (serves iPXE binaries to legacy PXE clients)
 enable-tftp
@@ -28,6 +34,6 @@ dhcp-match=set:uefi,option:client-arch,9
 dhcp-boot=tag:!ipxe,tag:bios,undionly.kpxe
 dhcp-boot=tag:!ipxe,tag:uefi,ipxe.efi
 # Stage 2: iPXE has loaded; send it to our HTTP boot script
-dhcp-boot=tag:ipxe,http://10.0.10.10/boot.ipxe
+dhcp-boot=tag:ipxe,http://{{IP}}/boot.ipxe
 
 log-dhcp

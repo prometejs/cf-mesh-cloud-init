@@ -1,18 +1,17 @@
 #!ipxe
-# /srv/http/boot.ipxe — example iPXE script.
-# Boots the Ubuntu live-server kernel with NoCloud datasource pulled over HTTP.
-# Per-host seed dirs are keyed by MAC: http://10.0.10.10/seed/${mac:hexhyp}/
-# iPXE substitutes `${mac:hexhyp}` with the booting NIC's MAC, so each host gets its own seed directory.
-#
-# Replace VERSION + paths to match your local mirror.
+# iPXE boot script — single source of truth.
+# Rendered to /var/www/html/boot.ipxe by scripts/bootstrap-provisioner.sh, with
+# the {{...}} placeholders filled from flags. iPXE's own ${mac:hexhyp}, ${base},
+# and ${seed} are left intact for iPXE to expand at boot.
+# Per-host seed dirs are keyed by MAC: http://{{IP}}/seed/${mac:hexhyp}/
 
-set base http://10.0.10.10/ubuntu/22.04
-set seed http://10.0.10.10/seed/${mac:hexhyp}/
+set base http://{{IP}}/ubuntu/{{UBUNTU_VERSION}}
+set seed http://{{IP}}/seed/${mac:hexhyp}/
 
 kernel ${base}/vmlinuz \
   initrd=initrd \
   ip=dhcp \
-  url=${base}/ubuntu-22.04-live-server-amd64.iso \
+  url=${base}/ubuntu-{{UBUNTU_VERSION}}-live-server-amd64.iso \
   autoinstall \
   ds=nocloud-net;s=${seed} \
   cloud-config-url=${seed}user-data \

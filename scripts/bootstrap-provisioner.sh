@@ -73,8 +73,9 @@ require S3_KEY s3-key
 require SSH_PUBKEY ssh-pubkey
 GATEWAY=${GATEWAY:-$IP}
 
-for f in scripts/seed-server.py cloud-init/user-data.tpl \
-         tests/deploy/seed-server.service tests/deploy/seed-server.conf; do
+for f in scripts/seed-server.py scripts/render-template.sh cloud-init/user-data.tpl \
+         tests/deploy/seed-server.service pxe/apache-provisioner.conf.example \
+         pxe/dnsmasq.conf.example pxe/boot.ipxe.example; do
   [[ -f "$REPO_ROOT/$f" ]] || die "expected repo asset missing: $f (run from a repo checkout)"
 done
 
@@ -130,11 +131,14 @@ systemctl daemon-reload
 systemctl enable --now seed-server
 
 # ---- 6. Apache -----------------------------------------------------------
-echo "==> Configuring Apache reverse-proxy"
+# Combined vhost: serves static PXE assets (/boot.ipxe, /ubuntu/) AND proxies
+# /seed/ to the Python daemon. Disabling 000-default is safe because this vhost
+# is itself the static file server for /var/www/html.
+echo "==> Configuring Apache (static PXE + seed proxy)"
 a2enmod proxy proxy_http
-install -m0644 "$REPO_ROOT/tests/deploy/seed-server.conf" \
-  /etc/apache2/sites-available/seed-server.conf
-a2ensite seed-server
+install -m0644 "$REPO_ROOT/pxe/apache-provisioner.conf.example" \
+  /etc/apache2/sites-available/cf-mesh-provisioner.conf
+a2ensite cf-mesh-provisioner
 a2dissite 000-default 2>/dev/null || true
 
 # ---- 7. TFTP / iPXE ------------------------------------------------------
@@ -144,58 +148,20 @@ install -m0644 /usr/lib/ipxe/undionly.kpxe "$TFTP_ROOT/"
 [[ -f /usr/lib/ipxe/ipxe.efi ]] && install -m0644 /usr/lib/ipxe/ipxe.efi "$TFTP_ROOT/"
 
 # ---- 8. dnsmasq config ---------------------------------------------------
-# Reference: pxe/dnsmasq.conf.example (kept in sync by hand).
+# Rendered from pxe/dnsmasq.conf.example (single source of truth).
 echo "==> Writing /etc/dnsmasq.d/pxe.conf"
-cat > /etc/dnsmasq.d/pxe.conf <<EOF
-# Managed by bootstrap-provisioner.sh
-interface=$IFACE
-bind-interfaces
-domain-needed
-bogus-priv
-
-dhcp-range=$DHCP_RANGE
-dhcp-option=3,$GATEWAY
-dhcp-option=6,$DNS
-
-enable-tftp
-tftp-root=$TFTP_ROOT
-
-# Tag iPXE clients (DHCP option 175) and detect BIOS vs UEFI.
-dhcp-match=set:ipxe,175
-dhcp-match=set:bios,option:client-arch,0
-dhcp-match=set:uefi,option:client-arch,7
-dhcp-match=set:uefi,option:client-arch,9
-
-# Stage 1: legacy PXE -> iPXE binary. Stage 2: iPXE -> HTTP boot script.
-dhcp-boot=tag:!ipxe,tag:bios,undionly.kpxe
-dhcp-boot=tag:!ipxe,tag:uefi,ipxe.efi
-dhcp-boot=tag:ipxe,http://$IP/boot.ipxe
-
-log-dhcp
-EOF
+IFACE="$IFACE" DHCP_RANGE="$DHCP_RANGE" GATEWAY="$GATEWAY" DNS="$DNS" IP="$IP" \
+  TEMPLATE="$REPO_ROOT/pxe/dnsmasq.conf.example" \
+  "$REPO_ROOT/scripts/render-template.sh" > /etc/dnsmasq.d/pxe.conf
 systemctl enable dnsmasq
 
 # ---- 9. HTTP root / boot.ipxe -------------------------------------------
-# Reference: pxe/boot.ipxe.example (kept in sync by hand).
+# Rendered from pxe/boot.ipxe.example (single source of truth).
 echo "==> Writing $WWW_ROOT/boot.ipxe"
 install -d -m0755 "$WWW_ROOT"
-cat > "$WWW_ROOT/boot.ipxe" <<EOF
-#!ipxe
-# Managed by bootstrap-provisioner.sh
-set base http://$IP/ubuntu/$UBUNTU_VERSION
-set seed http://$IP/seed/\${mac:hexhyp}/
-
-kernel \${base}/vmlinuz \\
-  initrd=initrd \\
-  ip=dhcp \\
-  url=\${base}/ubuntu-$UBUNTU_VERSION-live-server-amd64.iso \\
-  autoinstall \\
-  ds=nocloud-net;s=\${seed} \\
-  cloud-config-url=\${seed}user-data \\
-  ---
-initrd \${base}/initrd
-boot
-EOF
+IP="$IP" UBUNTU_VERSION="$UBUNTU_VERSION" \
+  TEMPLATE="$REPO_ROOT/pxe/boot.ipxe.example" \
+  "$REPO_ROOT/scripts/render-template.sh" > "$WWW_ROOT/boot.ipxe"
 
 # ---- 10. ISO verify (no download) ---------------------------------------
 ISO_DIR="$WWW_ROOT/ubuntu/$UBUNTU_VERSION"
@@ -224,11 +190,19 @@ for svc in dnsmasq apache2 seed-server; do
   fi
 done
 
-code=$(curl -s -o /dev/null -w '%{http_code}' \
-  http://localhost/seed/aa-bb-cc-00-00-0a/meta-data || true)
-case "$code" in
-  200|404) echo "    seed stack healthy (HTTP $code from loopback)" ;;
-  *)       echo "    seed stack UNHEALTHY (HTTP $code) — check 'journalctl -u seed-server'" >&2 ;;
+# Seed proxy: 200 (known MAC) or 404 (unknown) both prove Apache->Python is up.
+seed_code=$(curl -s -o /dev/null -w '%{http_code}' \
+  http://127.0.0.1/seed/aa-bb-cc-00-00-0a/meta-data || true)
+case "$seed_code" in
+  200|404) echo "    seed proxy healthy (HTTP $seed_code from loopback)" ;;
+  *)       echo "    seed proxy UNHEALTHY (HTTP $seed_code) — check 'journalctl -u seed-server'" >&2 ;;
+esac
+
+# Static PXE asset: iPXE fetches this over HTTP, so it must be served (not 403).
+boot_code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/boot.ipxe || true)
+case "$boot_code" in
+  200) echo "    boot.ipxe served (HTTP 200)" ;;
+  *)   echo "    boot.ipxe NOT served (HTTP $boot_code) — PXE clients can't chainload; check Apache vhost" >&2 ;;
 esac
 
 # ---- 12. Summary ---------------------------------------------------------
